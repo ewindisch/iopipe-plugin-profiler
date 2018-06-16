@@ -45,7 +45,8 @@ test('Can instantiate plugin with options', () => {
 test('works with iopipe', async function runTest() {
   const iopipeInstance = iopipe({
     token: 'test',
-    plugins: [Profiler({ debug: true, enabled: true })]
+    plugins: [Profiler({ debug: true, enabled: true })],
+    url: 'http://localhost/'
   });
   const wrappedFn = iopipeInstance((event, context) => {
     // add expectation here that the profiler is running
