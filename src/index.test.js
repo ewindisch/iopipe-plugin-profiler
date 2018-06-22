@@ -3,6 +3,7 @@ import _ from 'lodash';
 import iopipe from '@iopipe/core';
 import Profiler from './index';
 import pkg from '../package.json';
+import Unzip from 'zlib';
 
 jest.mock('v8-profiler-lambda');
 jest.mock('./request');
@@ -61,6 +62,10 @@ test('works with iopipe', async function runTest() {
   expect(putData.length).toBe(1);
   // Test that the data returned has the zip format magic bytes.
   expect(putData[0].slice(0, 4)).toEqual(Buffer([80, 75, 3, 4]));
+
+  // Extract and evaluate contents of zip to check for profile & heap files.
+  const archive = Unzip(putData[0]);
+  archive.read();
 });
 
 test('running post-invoke adds uploads to metadata', async function runTest() {

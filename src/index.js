@@ -9,6 +9,8 @@ import * as stream from 'stream';
 
 const pkg = require('../package.json');
 
+//var v8 = require("v8"); v8.setFlagsFromString("--trace");
+
 const defaultConfig = {
   recSamples: true,
   sampleRate: 1000,
@@ -62,6 +64,12 @@ class ProfilerPlugin {
   preInvoke() {
     if (!this.enabled) {
       return;
+    }
+
+    try {
+      this.inspector.disconnect();
+    } catch (err) {
+      this.log(`warning disconnecting to inspector: ${err}`);
     }
 
     try {
@@ -158,19 +166,19 @@ class ProfilerPlugin {
           resolve();
         });
 
-        const filesCount = [
-          this.profilerEnabled,
-          this.heapsnapshotEnabled
-        ].filter(file => file > 0).length;
+        const filesCount = this.profilerEnabled + this.heapsnapshotEnabled;
         filesSeen = 0;
         archive.on('entry', () => {
+          this.log(`Archive received entry [${filesSeen}/${filesCount}]`);
           filesSeen++;
           if (filesSeen >= filesCount) {
+            this.log('Last entry. Finalizing archive.');
             archive.finalize();
           }
         });
         if (this.profilerEnabled) {
           this.inspector.post('Profiler.stop', (err, { profile }) => {
+            this.log('adding cpuprofile to archive.');
             archive.append(JSON.stringify(profile), {
               name: 'profile.cpuprofile'
             });
@@ -182,6 +190,7 @@ class ProfilerPlugin {
             'HeapProfiler.reportHeapSnapshotProgress',
             ([, , finished]) => {
               if (finished) {
+                this.log('snapshot completed. closing stream.');
                 heap.end();
               }
             }
@@ -189,14 +198,20 @@ class ProfilerPlugin {
           this.inspector.on(
             'HeapProfiler.addHeapSnapshotChunk',
             ({ chunk }) => {
-              heap.write(chunk);
+              if (chunk) {
+                this.log('writing snapshot chunk.');
+                heap.write(chunk);
+              }
             }
           );
+          this.log('Posting takeHeapSnapshot to inspector.');
           this.inspector.post(
             'HeapProfiler.takeHeapSnapshot',
             { reportProgress: true },
             () => {
+              this.log('Appending heap snapshot to archive');
               archive.append(heap, { name: 'profile.heapsnapshot' });
+              this.log('Appended heap snapshot to archive.');
             }
           );
         }
